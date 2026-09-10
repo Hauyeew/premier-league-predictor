@@ -1,11 +1,9 @@
 import pandas as pd
 import pickle
 
-from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 
 from sklearn.metrics import (
@@ -89,10 +87,12 @@ model = LogisticRegression(
     max_iter=2000,
 )
 
-model = Pipeline([
-    ("scaler", StandardScaler()),
-    ("classifier", LogisticRegression(max_iter=2000))
-])
+model = RandomForestClassifier(
+    n_estimators=300,
+    max_depth=8,
+    min_samples_leaf=5,
+    random_state=42
+)
 
 # Train
 model.fit(X_train, y_train)
