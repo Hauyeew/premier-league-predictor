@@ -9,49 +9,16 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/predictions.csv")
-      .then((response) => response.text())
-      .then((csv) => {
-        const lines = csv.trim().split("\n");
-
-        const headers = lines[0].split(",");
-
-        const rows: Prediction[] = lines
-          .slice(1)
-          .map((line) => {
-            const values = line.split(",");
-
-            const row: Record<string, string> = {};
-
-            headers.forEach((header, index) => {
-              row[header] = values[index];
-            });
-
-            return {
-              Date: row.Date,
-              HomeTeam: row.HomeTeam,
-              AwayTeam: row.AwayTeam,
-
-              Probability_H: Number(
-                row.Probability_H
-              ),
-
-              Probability_D: Number(
-                row.Probability_D
-              ),
-
-              Probability_A: Number(
-                row.Probability_A
-              ),
-
-              Prediction: row.Prediction as
-                | "H"
-                | "D"
-                | "A",
-            };
-          });
-
-        setPredictions(rows);
+    fetch("http://127.0.0.1:8000/api/predictions")
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to fetch predictions");
+        }
+  
+        return response.json();
+      })
+      .then((data: Prediction[]) => {
+        setPredictions(data);
         setLoading(false);
       })
       .catch((error) => {
@@ -59,7 +26,7 @@ function App() {
           "Failed to load predictions:",
           error
         );
-
+  
         setLoading(false);
       });
   }, []);
