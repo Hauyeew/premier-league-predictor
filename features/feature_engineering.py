@@ -16,31 +16,39 @@ def create_features(df, window=5, venue_window=10, h2h_window=5, xg_window=5):
 
     # Normalize team names
     team_name_map = {
-        "Man United": "Manchester United",
-        "Man City": "Manchester City",
-        "Newcastle": "Newcastle United",
-        "Nott'm Forest": "Nottingham Forest",
-        "West Brom": "West Bromwich Albion",
-        "Wolves": "WolverhamptonWanderers",
-        "Leicester": "Leicester",
-        "Norwich": "Norwich",
-        "Sheffield United": "Sheffield United",
-        "Hull": "Hull",
-        "Swansea": "Swansea",
-        "Stoke": "Stoke",
-        "Middlesbrough": "Middlesbrough",
-        "Bournemouth": "Bournemouth",
-        "Burnley": "Burnley",
-        "Watford": "Watford",
-        "Crystal Palace": "Crystal Palace",
-        "Everton": "Everton",
-        "Southampton": "Southampton",
-        "Arsenal": "Arsenal",
-        "Liverpool": "Liverpool",
-        "Chelsea": "Chelsea",
-        "Tottenham": "Tottenham",
-    }
+    "Man United": "Manchester United",
+    "Man City": "Manchester City",
+    "Newcastle": "Newcastle United",
+    "Nott'm Forest": "Nottingham Forest",
 
+    "Wolves": "Wolverhampton Wanderers",
+
+    "West Brom": "West Bromwich Albion",
+
+    "Hull": "Hull City",
+    "Leeds": "Leeds United",
+    "Brighton": "Brighton & Hove Albion",
+    "Ipswich": "Ipswich Town",
+    "Coventry": "Coventry City",
+    "Tottenham": "Tottenham Hotspur",
+
+    "Bournemouth": "Bournemouth",
+    "Brentford": "Brentford",
+    "Crystal Palace": "Crystal Palace",
+    "Everton": "Everton",
+    "Southampton": "Southampton",
+    "Arsenal": "Arsenal",
+    "Liverpool": "Liverpool",
+    "Chelsea": "Chelsea",
+    "Burnley": "Burnley",
+    "Watford": "Watford",
+    "Leicester": "Leicester",
+    "Norwich": "Norwich",
+    "Sheffield United": "Sheffield United",
+    "Swansea": "Swansea",
+    "Stoke": "Stoke",
+    "Middlesbrough": "Middlesbrough",
+}
     df["HomeTeam"] = df["HomeTeam"].replace(team_name_map)
     df["AwayTeam"] = df["AwayTeam"].replace(team_name_map)
 
@@ -693,35 +701,37 @@ def create_features(df, window=5, venue_window=10, h2h_window=5, xg_window=5):
 
         for _, match in day_matches.iterrows():
 
+            # Upcoming matches have no result.
+            # Do NOT add them to historical data.
+            if pd.isna(match["FTR"]):
+                continue
+
             home_team = match["HomeTeam"]
             away_team = match["AwayTeam"]
 
             # Determine result
             if match["FTR"] == "H":
-
                 home_result = "W"
                 away_result = "L"
-
                 home_points = 3
                 away_points = 0
 
             elif match["FTR"] == "D":
-
                 home_result = "D"
                 away_result = "D"
-
                 home_points = 1
                 away_points = 1
 
             else:
-
                 home_result = "L"
                 away_result = "W"
-
                 home_points = 0
                 away_points = 3
 
-            # Overall history
+            # ==========================================
+            # OVERALL HISTORY
+            # ==========================================
+
             team_history[home_team].append({
                 "goals_scored": match["FTHG"],
                 "goals_conceded": match["FTAG"],
@@ -742,7 +752,10 @@ def create_features(df, window=5, venue_window=10, h2h_window=5, xg_window=5):
                 "points": away_points
             })
 
-            # Home history
+            # ==========================================
+            # HOME HISTORY
+            # ==========================================
+
             home_history[home_team].append({
                 "goals_scored": match["FTHG"],
                 "goals_conceded": match["FTAG"],
@@ -751,7 +764,10 @@ def create_features(df, window=5, venue_window=10, h2h_window=5, xg_window=5):
                 "points": home_points
             })
 
-            # Away history
+            # ==========================================
+            # AWAY HISTORY
+            # ==========================================
+
             away_history[away_team].append({
                 "goals_scored": match["FTAG"],
                 "goals_conceded": match["FTHG"],
@@ -804,5 +820,6 @@ def create_features(df, window=5, venue_window=10, h2h_window=5, xg_window=5):
                 "away_goals": match["FTAG"],
                 "result": match["FTR"]
             })
+
 
     return pd.DataFrame(feature_rows)
