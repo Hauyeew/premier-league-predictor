@@ -1,36 +1,101 @@
 import pandas as pd
 
 
-def create_features(df, window=5):
+def create_features(df, window=5, venue_window=10, h2h_window=5, xg_window=5):
+
     df = df.copy()
 
-    # Make sure dates are actual dates
-    df["Date"] = pd.to_datetime(df["Date"])
+    # ==========================================
+    # LOAD AND MERGE xG DATA
+    # ==========================================
 
-    # Sort chronologically
+    xg_df = pd.read_csv("data/xg.csv")
+
+    df["Date"] = pd.to_datetime(df["Date"]).dt.date
+    xg_df["Date"] = pd.to_datetime(xg_df["Date"]).dt.date
+
+    # Normalize team names
+    team_name_map = {
+        "Man United": "Manchester United",
+        "Man City": "Manchester City",
+        "Newcastle": "Newcastle United",
+        "Nott'm Forest": "Nottingham Forest",
+        "West Brom": "West Bromwich Albion",
+        "Wolves": "WolverhamptonWanderers",
+        "Leicester": "Leicester",
+        "Norwich": "Norwich",
+        "Sheffield United": "Sheffield United",
+        "Hull": "Hull",
+        "Swansea": "Swansea",
+        "Stoke": "Stoke",
+        "Middlesbrough": "Middlesbrough",
+        "Bournemouth": "Bournemouth",
+        "Burnley": "Burnley",
+        "Watford": "Watford",
+        "Crystal Palace": "Crystal Palace",
+        "Everton": "Everton",
+        "Southampton": "Southampton",
+        "Arsenal": "Arsenal",
+        "Liverpool": "Liverpool",
+        "Chelsea": "Chelsea",
+        "Tottenham": "Tottenham",
+    }
+
+    df["HomeTeam"] = df["HomeTeam"].replace(team_name_map)
+    df["AwayTeam"] = df["AwayTeam"].replace(team_name_map)
+
+    xg_df["HomeTeam"] = xg_df["HomeTeam"].replace(team_name_map)
+    xg_df["AwayTeam"] = xg_df["AwayTeam"].replace(team_name_map)
+
+    # Match xG to historical match data
+    df = df.merge(
+        xg_df[
+            [
+                "Date",
+                "HomeTeam",
+                "AwayTeam",
+                "HomeXG",
+                "AwayXG"
+            ]
+        ],
+        on=["Date", "HomeTeam", "AwayTeam"],
+        how="left"
+    )
+
+    # Make sure xG is numeric
+    df["HomeXG"] = pd.to_numeric(df["HomeXG"], errors="coerce")
+    df["AwayXG"] = pd.to_numeric(df["AwayXG"], errors="coerce")
+
     df = df.sort_values("Date").reset_index(drop=True)
 
-    # Overall team history
+    # ==========================================
+    # HISTORIES
+    # ==========================================
+
     team_history = {}
 
-    # Home-only history
     home_history = {}
 
-    # Away-only history
     away_history = {}
+
+    h2h_history = {}
+
+    # xG history
+    xg_history = {}
 
     feature_rows = []
 
-    # Process one DATE at a time.
-    # This prevents one match's result from affecting another
-    # match played on the same day.
+    # ==========================================
+    # PROCESS ONE DATE AT A TIME
+    # ==========================================
+
     for date, day_matches in df.groupby("Date", sort=True):
 
         day_features = []
 
-        # --------------------------------------------------
-        # CREATE FEATURES USING ONLY HISTORY BEFORE THIS DATE
-        # --------------------------------------------------
+        # ==========================================
+        # CREATE FEATURES USING ONLY PAST MATCHES
+        # ==========================================
 
         for _, match in day_matches.iterrows():
 
@@ -49,23 +114,38 @@ def create_features(df, window=5):
                 if team not in away_history:
                     away_history[team] = []
 
-            # Last 5 overall matches
+                if team not in xg_history:
+                    xg_history[team] = []
+
+            # H2H key
+            h2h_key = tuple(
+                sorted([home_team, away_team])
+            )
+
+            if h2h_key not in h2h_history:
+                h2h_history[h2h_key] = []
+
+            # Recent overall matches
             home_recent = team_history[home_team][-window:]
             away_recent = team_history[away_team][-window:]
 
-            # Last 5 home matches
-            home_home_recent = home_history[home_team][-window:]
+            # Recent home/away matches
+            home_home_recent = home_history[home_team][-venue_window:]
+            away_away_recent = away_history[away_team][-venue_window:]
 
-            # Last 5 away matches
-            away_away_recent = away_history[away_team][-window:]
+            # Recent H2H
+            recent_h2h = h2h_history[h2h_key][-h2h_window:]
 
-            # We only require 5 overall matches.
-            # Home/away history can have fewer than 5.
+            # Recent xG
+            home_xg_recent = xg_history[home_team][-xg_window:]
+            away_xg_recent = xg_history[away_team][-xg_window:]
+
+            # Need enough overall history
             if len(home_recent) >= window and len(away_recent) >= window:
 
-                # -------------------------
-                # Overall statistics
-                # -------------------------
+                # ==========================================
+                # OVERALL TEAM STATS
+                # ==========================================
 
                 home_goals_scored = (
                     sum(x["goals_scored"] for x in home_recent)
@@ -107,10 +187,6 @@ def create_features(df, window=5):
                     / len(away_recent)
                 )
 
-                # -------------------------
-                # Recent form
-                # -------------------------
-
                 home_form = (
                     sum(x["form"] for x in home_recent)
                     / len(home_recent)
@@ -121,9 +197,9 @@ def create_features(df, window=5):
                     / len(away_recent)
                 )
 
-                # -------------------------
-                # Home / away specific stats
-                # -------------------------
+                # ==========================================
+                # HOME TEAM STRENGTH
+                # ==========================================
 
                 if len(home_home_recent) > 0:
 
@@ -133,26 +209,54 @@ def create_features(df, window=5):
                     )
 
                     home_goals_scored_at_home = (
-                        sum(
-                            x["goals_scored"]
-                            for x in home_home_recent
-                        )
+                        sum(x["goals_scored"] for x in home_home_recent)
                         / len(home_home_recent)
                     )
 
                     home_goals_conceded_at_home = (
+                        sum(x["goals_conceded"] for x in home_home_recent)
+                        / len(home_home_recent)
+                    )
+
+                    home_win_rate = (
                         sum(
-                            x["goals_conceded"]
+                            1
                             for x in home_home_recent
+                            if x["result"] == "W"
                         )
+                        / len(home_home_recent)
+                    )
+
+                    home_points_per_game = (
+                        sum(x["points"] for x in home_home_recent)
                         / len(home_home_recent)
                     )
 
                 else:
 
                     home_home_form = home_form
+
                     home_goals_scored_at_home = home_goals_scored
+
                     home_goals_conceded_at_home = home_goals_conceded
+
+                    home_win_rate = (
+                        sum(
+                            1
+                            for x in home_recent
+                            if x["result"] == "W"
+                        )
+                        / len(home_recent)
+                    )
+
+                    home_points_per_game = (
+                        sum(x["points"] for x in home_recent)
+                        / len(home_recent)
+                    )
+
+                # ==========================================
+                # AWAY TEAM STRENGTH
+                # ==========================================
 
                 if len(away_away_recent) > 0:
 
@@ -162,30 +266,182 @@ def create_features(df, window=5):
                     )
 
                     away_goals_scored_away = (
-                        sum(
-                            x["goals_scored"]
-                            for x in away_away_recent
-                        )
+                        sum(x["goals_scored"] for x in away_away_recent)
                         / len(away_away_recent)
                     )
 
                     away_goals_conceded_away = (
+                        sum(x["goals_conceded"] for x in away_away_recent)
+                        / len(away_away_recent)
+                    )
+
+                    away_win_rate = (
                         sum(
-                            x["goals_conceded"]
+                            1
                             for x in away_away_recent
+                            if x["result"] == "W"
                         )
+                        / len(away_away_recent)
+                    )
+
+                    away_points_per_game = (
+                        sum(x["points"] for x in away_away_recent)
                         / len(away_away_recent)
                     )
 
                 else:
 
                     away_away_form = away_form
+
                     away_goals_scored_away = away_goals_scored
+
                     away_goals_conceded_away = away_goals_conceded
 
-                # -------------------------
-                # Differences
-                # -------------------------
+                    away_win_rate = (
+                        sum(
+                            1
+                            for x in away_recent
+                            if x["result"] == "W"
+                        )
+                        / len(away_recent)
+                    )
+
+                    away_points_per_game = (
+                        sum(x["points"] for x in away_recent)
+                        / len(away_recent)
+                    )
+
+                # ==========================================
+                # HISTORICAL xG
+                # ==========================================
+
+                if len(home_xg_recent) > 0:
+
+                    home_xg_for = (
+                        sum(x["xg_for"] for x in home_xg_recent)
+                        / len(home_xg_recent)
+                    )
+
+                    home_xg_against = (
+                        sum(x["xg_against"] for x in home_xg_recent)
+                        / len(home_xg_recent)
+                    )
+
+                else:
+
+                    home_xg_for = 0
+                    home_xg_against = 0
+
+                if len(away_xg_recent) > 0:
+
+                    away_xg_for = (
+                        sum(x["xg_for"] for x in away_xg_recent)
+                        / len(away_xg_recent)
+                    )
+
+                    away_xg_against = (
+                        sum(x["xg_against"] for x in away_xg_recent)
+                        / len(away_xg_recent)
+                    )
+
+                else:
+
+                    away_xg_for = 0
+                    away_xg_against = 0
+
+                # xG differences
+                xg_attack_difference = (
+                    home_xg_for - away_xg_for
+                )
+
+                xg_defense_difference = (
+                    away_xg_against - home_xg_against
+                )
+
+                # ==========================================
+                # HEAD-TO-HEAD
+                # ==========================================
+
+                if len(recent_h2h) > 0:
+
+                    home_h2h_wins = 0
+                    draws = 0
+                    away_h2h_wins = 0
+
+                    home_h2h_goals = 0
+                    away_h2h_goals = 0
+
+                    for h2h in recent_h2h:
+
+                        if h2h["home_team"] == home_team:
+
+                            home_h2h_goals += h2h["home_goals"]
+                            away_h2h_goals += h2h["away_goals"]
+
+                            if h2h["result"] == "H":
+                                home_h2h_wins += 1
+
+                            elif h2h["result"] == "D":
+                                draws += 1
+
+                            else:
+                                away_h2h_wins += 1
+
+                        else:
+
+                            home_h2h_goals += h2h["away_goals"]
+                            away_h2h_goals += h2h["home_goals"]
+
+                            if h2h["result"] == "A":
+                                home_h2h_wins += 1
+
+                            elif h2h["result"] == "D":
+                                draws += 1
+
+                            else:
+                                away_h2h_wins += 1
+
+                    h2h_meetings = len(recent_h2h)
+
+                    h2h_home_win_rate = (
+                        home_h2h_wins / h2h_meetings
+                    )
+
+                    h2h_draw_rate = (
+                        draws / h2h_meetings
+                    )
+
+                    h2h_away_win_rate = (
+                        away_h2h_wins / h2h_meetings
+                    )
+
+                    h2h_goals_for = (
+                        home_h2h_goals / h2h_meetings
+                    )
+
+                    h2h_goals_against = (
+                        away_h2h_goals / h2h_meetings
+                    )
+
+                    h2h_goal_difference = (
+                        h2h_goals_for - h2h_goals_against
+                    )
+
+                else:
+
+                    h2h_home_win_rate = 1 / 3
+                    h2h_draw_rate = 1 / 3
+                    h2h_away_win_rate = 1 / 3
+
+                    h2h_goals_for = 0
+                    h2h_goals_against = 0
+                    h2h_goal_difference = 0
+
+                    h2h_meetings = 0
+
+                # ==========================================
+                # DIFFERENCES
+                # ==========================================
 
                 attack_difference = (
                     home_goals_scored
@@ -198,8 +454,7 @@ def create_features(df, window=5):
                 )
 
                 form_difference = (
-                    home_form
-                    - away_form
+                    home_form - away_form
                 )
 
                 home_away_attack_difference = (
@@ -212,45 +467,52 @@ def create_features(df, window=5):
                     - home_goals_conceded_at_home
                 )
 
-                # -------------------------
-                # Store features
-                # -------------------------
+                shots_difference = (
+                    home_shots - away_shots
+                )
+
+                shots_on_target_difference = (
+                    home_shots_on_target
+                    - away_shots_on_target
+                )
+
+                home_win_rate_difference = (
+                    home_win_rate - away_win_rate
+                )
+
+                points_per_game_difference = (
+                    home_points_per_game
+                    - away_points_per_game
+                )
+
+                # ==========================================
+                # FEATURE ROW
+                # ==========================================
 
                 features = {
 
                     "Date": match["Date"],
-
                     "HomeTeam": home_team,
-
                     "AwayTeam": away_team,
 
                     # Overall stats
                     "HomeGoalsScored": home_goals_scored,
-
                     "HomeGoalsConceded": home_goals_conceded,
-
                     "HomeShots": home_shots,
-
                     "HomeShotsOnTarget": home_shots_on_target,
 
                     "AwayGoalsScored": away_goals_scored,
-
                     "AwayGoalsConceded": away_goals_conceded,
-
                     "AwayShots": away_shots,
-
                     "AwayShotsOnTarget": away_shots_on_target,
 
                     # Form
                     "HomeForm": home_form,
-
                     "AwayForm": away_form,
-
                     "FormDifference": form_difference,
 
-                    # Home/away form
+                    # Venue-specific
                     "HomeHomeForm": home_home_form,
-
                     "AwayAwayForm": away_away_form,
 
                     "HomeAwayFormDifference": (
@@ -258,7 +520,6 @@ def create_features(df, window=5):
                         - away_away_form
                     ),
 
-                    # Home/away goals
                     "HomeGoalsScoredAtHome": (
                         home_goals_scored_at_home
                     ),
@@ -275,9 +536,23 @@ def create_features(df, window=5):
                         away_goals_conceded_away
                     ),
 
-                    # Strength differences
-                    "AttackDifference": attack_difference,
+                    # Team strength
+                    "HomeWinRate": home_win_rate,
+                    "AwayWinRate": away_win_rate,
 
+                    "HomePointsPerGame": home_points_per_game,
+                    "AwayPointsPerGame": away_points_per_game,
+
+                    "HomeWinRateDifference": (
+                        home_win_rate_difference
+                    ),
+
+                    "PointsPerGameDifference": (
+                        points_per_game_difference
+                    ),
+
+                    # Goal differences
+                    "AttackDifference": attack_difference,
                     "DefenseDifference": defense_difference,
 
                     "HomeAwayAttackDifference": (
@@ -288,15 +563,44 @@ def create_features(df, window=5):
                         home_away_defense_difference
                     ),
 
-                    "ShotsDifference": (
-                        home_shots
-                        - away_shots
-                    ),
+                    # Shots
+                    "ShotsDifference": shots_difference,
 
                     "ShotsOnTargetDifference": (
-                        home_shots_on_target
-                        - away_shots_on_target
+                        shots_on_target_difference
                     ),
+
+                    # ==========================================
+                    # xG FEATURES
+                    # ==========================================
+
+                    "HomeXG": home_xg_for,
+                    "HomeXGA": home_xg_against,
+
+                    "AwayXG": away_xg_for,
+                    "AwayXGA": away_xg_against,
+
+                    "XGAttackDifference": (
+                        xg_attack_difference
+                    ),
+
+                    "XGDefenseDifference": (
+                        xg_defense_difference
+                    ),
+
+                    # H2H
+                    "H2HHomeWinRate": h2h_home_win_rate,
+                    "H2HDrawRate": h2h_draw_rate,
+                    "H2HAwayWinRate": h2h_away_win_rate,
+
+                    "H2HGoalsFor": h2h_goals_for,
+                    "H2HGoalsAgainst": h2h_goals_against,
+
+                    "H2HGoalDifference": (
+                        h2h_goal_difference
+                    ),
+
+                    "H2HMeetings": h2h_meetings,
 
                     # Target
                     "Result": match["FTR"]
@@ -304,30 +608,41 @@ def create_features(df, window=5):
 
                 day_features.append(features)
 
-        # Add today's features only AFTER ALL today's matches
-        # have been created.
         feature_rows.extend(day_features)
 
-        # --------------------------------------------------
-        # NOW UPDATE HISTORY WITH TODAY'S RESULTS
-        # --------------------------------------------------
+        # ==========================================
+        # UPDATE HISTORIES
+        # ==========================================
 
         for _, match in day_matches.iterrows():
 
             home_team = match["HomeTeam"]
             away_team = match["AwayTeam"]
 
+            # Determine result
             if match["FTR"] == "H":
-                home_result = 3
-                away_result = 0
+
+                home_result = "W"
+                away_result = "L"
+
+                home_points = 3
+                away_points = 0
 
             elif match["FTR"] == "D":
-                home_result = 1
-                away_result = 1
+
+                home_result = "D"
+                away_result = "D"
+
+                home_points = 1
+                away_points = 1
 
             else:
-                home_result = 0
-                away_result = 3
+
+                home_result = "L"
+                away_result = "W"
+
+                home_points = 0
+                away_points = 3
 
             # Overall history
             team_history[home_team].append({
@@ -335,7 +650,9 @@ def create_features(df, window=5):
                 "goals_conceded": match["FTAG"],
                 "shots": match["HS"],
                 "shots_on_target": match["HST"],
-                "form": home_result
+                "form": home_points,
+                "result": home_result,
+                "points": home_points
             })
 
             team_history[away_team].append({
@@ -343,21 +660,59 @@ def create_features(df, window=5):
                 "goals_conceded": match["FTHG"],
                 "shots": match["AS"],
                 "shots_on_target": match["AST"],
-                "form": away_result
+                "form": away_points,
+                "result": away_result,
+                "points": away_points
             })
 
             # Home history
             home_history[home_team].append({
                 "goals_scored": match["FTHG"],
                 "goals_conceded": match["FTAG"],
-                "form": home_result
+                "form": home_points,
+                "result": home_result,
+                "points": home_points
             })
 
             # Away history
             away_history[away_team].append({
                 "goals_scored": match["FTAG"],
                 "goals_conceded": match["FTHG"],
-                "form": away_result
+                "form": away_points,
+                "result": away_result,
+                "points": away_points
+            })
+
+            # ==========================================
+            # xG HISTORY
+            # ==========================================
+
+            if pd.notna(match["HomeXG"]) and pd.notna(match["AwayXG"]):
+
+                xg_history[home_team].append({
+                    "xg_for": match["HomeXG"],
+                    "xg_against": match["AwayXG"]
+                })
+
+                xg_history[away_team].append({
+                    "xg_for": match["AwayXG"],
+                    "xg_against": match["HomeXG"]
+                })
+
+            # ==========================================
+            # H2H HISTORY
+            # ==========================================
+
+            h2h_key = tuple(
+                sorted([home_team, away_team])
+            )
+
+            h2h_history[h2h_key].append({
+                "home_team": home_team,
+                "away_team": away_team,
+                "home_goals": match["FTHG"],
+                "away_goals": match["FTAG"],
+                "result": match["FTR"]
             })
 
     return pd.DataFrame(feature_rows)

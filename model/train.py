@@ -1,4 +1,3 @@
-
 import pandas as pd
 import pickle
 
@@ -14,10 +13,6 @@ from sklearn.preprocessing import LabelEncoder
 from features.feature_engineering import create_features
 
 
-# ==========================================
-# 1. Load data
-# ==========================================
-
 print("Creating features...")
 
 df = pd.read_csv("data/matches.csv")
@@ -28,61 +23,89 @@ print(f"Created {len(features)} training examples")
 
 
 # ==========================================
-# 2. Select features
+# FEATURES USED BY THE MODEL
 # ==========================================
 
 feature_columns = [
+
+    # Overall home team stats
     "HomeGoalsScored",
     "HomeGoalsConceded",
     "HomeShots",
     "HomeShotsOnTarget",
 
+    # Overall away team stats
     "AwayGoalsScored",
     "AwayGoalsConceded",
     "AwayShots",
     "AwayShotsOnTarget",
 
+    # Overall form
     "HomeForm",
     "AwayForm",
     "FormDifference",
 
+    # Venue-specific form
     "HomeHomeForm",
     "AwayAwayForm",
     "HomeAwayFormDifference",
 
+    # Venue-specific goals
     "HomeGoalsScoredAtHome",
     "HomeGoalsConcededAtHome",
-
     "AwayGoalsScoredAway",
     "AwayGoalsConcededAway",
 
+    "HomeXG",
+    "HomeXGA",
+    "AwayXG",
+    "AwayXGA",
+    "XGAttackDifference",
+    "XGDefenseDifference",  
+
+    # Team strength
+    "HomeWinRate",
+    "AwayWinRate",
+    "HomePointsPerGame",
+    "AwayPointsPerGame",
+    "HomeWinRateDifference",
+    "PointsPerGameDifference",
+
+    # Other differences
     "AttackDifference",
     "DefenseDifference",
-
     "HomeAwayAttackDifference",
     "HomeAwayDefenseDifference",
-
     "ShotsDifference",
-    "ShotsOnTargetDifference"
+    "ShotsOnTargetDifference",
+
+    # Head-to-head
+    "H2HHomeWinRate",
+    "H2HDrawRate",
+    "H2HAwayWinRate",
+    "H2HGoalsFor",
+    "H2HGoalsAgainst",
+    "H2HGoalDifference",
+    "H2HMeetings"
 ]
+
 
 X = features[feature_columns]
 y = features["Result"]
 
 
 # ==========================================
-# 3. Convert A/D/H into numbers
+# ENCODE H / D / A
 # ==========================================
 
 label_encoder = LabelEncoder()
-
 y_encoded = label_encoder.fit_transform(y)
 
 print("Classes:", label_encoder.classes_)
 
 
 # ==========================================
-# 4. Chronological train/test split
+# CHRONOLOGICAL TRAIN / TEST SPLIT
 # ==========================================
 
 split_index = int(len(features) * 0.8)
@@ -93,12 +116,13 @@ X_test = X.iloc[split_index:]
 y_train = y_encoded[:split_index]
 y_test = y_encoded[split_index:]
 
+
 print(f"Training matches: {len(X_train)}")
 print(f"Testing matches: {len(X_test)}")
 
 
 # ==========================================
-# 5. Create XGBoost model
+# XGBOOST
 # ==========================================
 
 model = XGBClassifier(
@@ -107,33 +131,25 @@ model = XGBClassifier(
     learning_rate=0.05,
     subsample=0.8,
     colsample_bytree=0.8,
-
     objective="multi:softprob",
     num_class=3,
     eval_metric="mlogloss",
-
     random_state=42
 )
-
-
-# ==========================================
-# 6. Train model
-# ==========================================
 
 model.fit(X_train, y_train)
 
 
 # ==========================================
-# 7. Make predictions
+# PREDICTIONS
 # ==========================================
 
 predictions = model.predict(X_test)
-
 probabilities = model.predict_proba(X_test)
 
 
 # ==========================================
-# 8. Accuracy
+# ACCURACY
 # ==========================================
 
 accuracy = accuracy_score(y_test, predictions)
@@ -145,7 +161,7 @@ print("==============================")
 
 
 # ==========================================
-# 9. Confusion matrix
+# CONFUSION MATRIX
 # ==========================================
 
 print()
@@ -153,11 +169,16 @@ print("==============================")
 print("Confusion Matrix")
 print("==============================")
 
-print(confusion_matrix(y_test, predictions))
+print(
+    confusion_matrix(
+        y_test,
+        predictions
+    )
+)
 
 
 # ==========================================
-# 10. Log loss
+# LOG LOSS
 # ==========================================
 
 loss = log_loss(y_test, probabilities)
@@ -171,7 +192,7 @@ print(f"{loss:.4f}")
 
 
 # ==========================================
-# 11. Classification report
+# CLASSIFICATION REPORT
 # ==========================================
 
 print()
@@ -189,7 +210,7 @@ print(
 
 
 # ==========================================
-# 12. Show example predictions
+# EXAMPLE PREDICTIONS
 # ==========================================
 
 print()
@@ -219,7 +240,7 @@ for i in range(min(10, len(X_test))):
 
 
 # ==========================================
-# 13. Save model
+# SAVE MODEL
 # ==========================================
 
 with open("model/model.pkl", "wb") as file:
