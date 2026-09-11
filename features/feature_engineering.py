@@ -83,6 +83,10 @@ def create_features(df, window=5, venue_window=10, h2h_window=5, xg_window=5):
     # xG history
     xg_history = {}
 
+    # Venue-specific xG history
+    home_xg_history = {}
+    away_xg_history = {}
+
     feature_rows = []
 
     # ==========================================
@@ -117,6 +121,12 @@ def create_features(df, window=5, venue_window=10, h2h_window=5, xg_window=5):
                 if team not in xg_history:
                     xg_history[team] = []
 
+                if team not in home_xg_history:
+                    home_xg_history[team] = []
+
+                if team not in away_xg_history:
+                    away_xg_history[team] = []
+
             # H2H key
             h2h_key = tuple(
                 sorted([home_team, away_team])
@@ -139,6 +149,14 @@ def create_features(df, window=5, venue_window=10, h2h_window=5, xg_window=5):
             # Recent xG
             home_xg_recent = xg_history[home_team][-xg_window:]
             away_xg_recent = xg_history[away_team][-xg_window:]
+
+            home_xg_at_home_recent = (
+                home_xg_history[home_team][-venue_window:]
+            )
+
+            away_xg_at_away_recent = (
+                away_xg_history[away_team][-venue_window:]
+            )
 
             # Need enough overall history
             if len(home_recent) >= window and len(away_recent) >= window:
@@ -349,6 +367,45 @@ def create_features(df, window=5, venue_window=10, h2h_window=5, xg_window=5):
                     away_xg_for = 0
                     away_xg_against = 0
 
+                # ==========================================
+                # VENUE-SPECIFIC xG
+                # ==========================================
+
+                if len(home_xg_at_home_recent) > 0:
+
+                    home_xg_at_home = (
+                        sum(x["xg_for"] for x in home_xg_at_home_recent)
+                        / len(home_xg_at_home_recent)
+                    )
+
+                    home_xga_at_home = (
+                        sum(x["xg_against"] for x in home_xg_at_home_recent)
+                        / len(home_xg_at_home_recent)
+                    )
+
+                else:
+
+                    home_xg_at_home = home_xg_for
+                    home_xga_at_home = home_xg_against
+
+
+                if len(away_xg_at_away_recent) > 0:
+
+                    away_xg_at_away = (
+                        sum(x["xg_for"] for x in away_xg_at_away_recent)
+                        / len(away_xg_at_away_recent)
+                    )
+
+                    away_xga_at_away = (
+                        sum(x["xg_against"] for x in away_xg_at_away_recent)
+                        / len(away_xg_at_away_recent)
+                    )
+
+                else:
+
+                    away_xg_at_away = away_xg_for
+                    away_xga_at_away = away_xg_against
+
                 # xG differences
                 xg_attack_difference = (
                     home_xg_for - away_xg_for
@@ -356,6 +413,14 @@ def create_features(df, window=5, venue_window=10, h2h_window=5, xg_window=5):
 
                 xg_defense_difference = (
                     away_xg_against - home_xg_against
+                )
+
+                venue_xg_attack_difference = (
+                    home_xg_at_home - away_xg_at_away
+                )
+
+                venue_xg_defense_difference = (
+                    away_xga_at_away - home_xga_at_home
                 )
 
                 # ==========================================
@@ -576,7 +641,6 @@ def create_features(df, window=5, venue_window=10, h2h_window=5, xg_window=5):
 
                     "HomeXG": home_xg_for,
                     "HomeXGA": home_xg_against,
-
                     "AwayXG": away_xg_for,
                     "AwayXGA": away_xg_against,
 
@@ -586,6 +650,19 @@ def create_features(df, window=5, venue_window=10, h2h_window=5, xg_window=5):
 
                     "XGDefenseDifference": (
                         xg_defense_difference
+                    ),
+
+                    "HomeXGAtHome": home_xg_at_home,
+                    "HomeXGAAtHome": home_xga_at_home,
+                    "AwayXGAtAway": away_xg_at_away,
+                    "AwayXGAAtAway": away_xga_at_away,
+
+                    "VenueXGAttackDifference": (
+                        venue_xg_attack_difference
+                    ),
+
+                    "VenueXGDefenseDifference": (
+                        venue_xg_defense_difference
                     ),
 
                     # H2H
@@ -689,12 +766,25 @@ def create_features(df, window=5, venue_window=10, h2h_window=5, xg_window=5):
 
             if pd.notna(match["HomeXG"]) and pd.notna(match["AwayXG"]):
 
+                # Overall xG history
                 xg_history[home_team].append({
                     "xg_for": match["HomeXG"],
                     "xg_against": match["AwayXG"]
                 })
 
                 xg_history[away_team].append({
+                    "xg_for": match["AwayXG"],
+                    "xg_against": match["HomeXG"]
+                })
+
+                # Home-specific xG history
+                home_xg_history[home_team].append({
+                    "xg_for": match["HomeXG"],
+                    "xg_against": match["AwayXG"]
+                })
+
+                # Away-specific xG history
+                away_xg_history[away_team].append({
                     "xg_for": match["AwayXG"],
                     "xg_against": match["HomeXG"]
                 })

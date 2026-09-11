@@ -140,6 +140,19 @@ model = XGBClassifier(
 model.fit(X_train, y_train)
 
 
+import pandas as pd
+
+importance = pd.Series(
+    model.feature_importances_,
+    index=feature_columns
+).sort_values(ascending=False)
+
+print()
+print("==============================")
+print("Feature Importance")
+print("==============================")
+print(importance.to_string())
+
 # ==========================================
 # PREDICTIONS
 # ==========================================
