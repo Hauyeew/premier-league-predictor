@@ -1,9 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import pandas as pd
-import joblib
 
-app = FastAPI()
+from model.predict import generate_predictions
+
+
+app = FastAPI(
+    title="PL Predictor API",
+    description="Premier League match prediction API",
+    version="1.0.0",
+)
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -12,9 +18,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-MODEL_FILE = "model/model.pkl"
-PREDICTIONS_FILE = "data/predictions.csv"
 
 
 @app.get("/")
@@ -26,18 +29,6 @@ def home():
 
 @app.get("/api/predictions")
 def get_predictions():
-    df = pd.read_csv(PREDICTIONS_FILE)
+    predictions = generate_predictions()
 
-    predictions = df[
-        [
-            "Date",
-            "HomeTeam",
-            "AwayTeam",
-            "Probability_H",
-            "Probability_D",
-            "Probability_A",
-            "Prediction",
-        ]
-    ]
-
-    return predictions.to_dict(orient="records")
+    return predictions

@@ -7,6 +7,7 @@ import "./App.css";
 function App() {
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("http://127.0.0.1:8000/api/predictions")
@@ -14,7 +15,7 @@ function App() {
         if (!response.ok) {
           throw new Error("Failed to fetch predictions");
         }
-  
+
         return response.json();
       })
       .then((data: Prediction[]) => {
@@ -22,60 +23,56 @@ function App() {
         setLoading(false);
       })
       .catch((error) => {
-        console.error(
-          "Failed to load predictions:",
-          error
-        );
-  
+        console.error("Failed to load predictions:", error);
+        setError("Unable to load predictions.");
         setLoading(false);
       });
   }, []);
 
   return (
-    <div className="app">
+    <>
       <Header />
 
-      <main className="main">
+      <main className="container">
         <section className="hero">
-          <div>
-            <p className="eyebrow">
-              NEXT MATCHWEEK
-            </p>
+          <h2>Premier League Predictions</h2>
 
-            <h2>
-              Premier League Predictions
-            </h2>
-          </div>
+          <p>
+            AI-powered predictions for the upcoming Premier League
+            fixtures.
+          </p>
 
-          <div className="match-count">
-            <strong>
-              {predictions.length}
-            </strong>
-
-            <span>Matches</span>
-          </div>
+          {!loading && !error && (
+            <div className="match-count">
+              {predictions.length} upcoming matches
+            </div>
+          )}
         </section>
 
-        {loading ? (
+        {loading && (
           <div className="loading">
             Loading predictions...
           </div>
-        ) : predictions.length === 0 ? (
-          <div className="empty">
-            No upcoming predictions found.
+        )}
+
+        {error && (
+          <div className="error">
+            {error}
           </div>
-        ) : (
-          <section className="matches">
+        )}
+
+        {!loading && !error && (
+          <section className="matches-grid">
             {predictions.map((match, index) => (
               <MatchCard
-                key={`${match.HomeTeam}-${match.AwayTeam}-${index}`}
+                key={`${match.Date}-${match.HomeTeam}-${match.AwayTeam}-${index}`}
                 match={match}
               />
             ))}
           </section>
         )}
       </main>
-    </div>
+    </>
   );
 }
 
