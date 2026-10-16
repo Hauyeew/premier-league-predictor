@@ -1,12 +1,19 @@
+import sys
+from pathlib import Path
+
 import joblib
 import pandas as pd
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from features.feature_engineering import create_features
 
 
-MATCHES_FILE = "data/matches.csv"
-FIXTURES_FILE = "data/fixtures.csv"
-MODEL_FILE = "model/model.pkl"
+MATCHES_FILE = ROOT / "data" / "matches.csv"
+FIXTURES_FILE = ROOT / "data" / "fixtures.csv"
+MODEL_FILE = ROOT / "model" / "model.pkl"
 
 
 TEAM_NAME_MAP = {

@@ -1,5 +1,8 @@
+from pathlib import Path
 
 import pandas as pd
+
+XG_FILE = Path(__file__).resolve().parents[1] / "data" / "xg.csv"
 
 
 def create_features(
@@ -15,7 +18,7 @@ def create_features(
     # LOAD AND MERGE xG DATA
     # ============================================================
 
-    xg_df = pd.read_csv("data/xg.csv")
+    xg_df = pd.read_csv(XG_FILE)
 
     df["Date"] = pd.to_datetime(df["Date"]).dt.date
     xg_df["Date"] = pd.to_datetime(xg_df["Date"]).dt.date
